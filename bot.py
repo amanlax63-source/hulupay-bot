@@ -1,8 +1,9 @@
 # =====================================================
 #   HULU PAY — Referral & Task Bot (Amharic)
-#   ሙሉ በአማርኛ | 4 Mandatory Channels | Task System
+#   For Render.com Deployment
 # =====================================================
 
+import os
 import re
 import time
 import sqlite3
@@ -10,7 +11,7 @@ import telebot
 from telebot import types
 
 # ============ CONFIG ============
-BOT_TOKEN = "8787473431:AAEFDykTUNiEAiPGd5Q_7lR1nQOZtC3WwmE"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 BOT_USERNAME = "HuluPayET_bot"
 
 ADMIN_IDS = [7783622296]
@@ -24,11 +25,10 @@ MANDATORY_CHANNELS = [
 
 WITHDRAW_CHANNEL = "@OnlineIncomeHub07"
 
-REFERRAL_BONUS  = 3.0          # ብር / ሪፈራል
-BONUS_AMOUNT    = 1.0          # የቀን ቦነስ
-BONUS_INTERVAL  = 24 * 3600    # 24 ሰዓት
-MIN_WITHDRAW    = 50.0         # ዝቅተኛ ዊዝድሮ
-MIN_WITHDRAW_TASK = 20.0       # ዝቅተኛ ለታስክ (አማራጭ)
+REFERRAL_BONUS  = 3.0
+BONUS_AMOUNT    = 1.0
+BONUS_INTERVAL  = 24 * 3600
+MIN_WITHDRAW    = 50.0
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
 
@@ -51,7 +51,6 @@ def init_db():
         verified      INTEGER DEFAULT 0,
         is_banned     INTEGER DEFAULT 0
     )""")
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS withdrawals (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +61,6 @@ def init_db():
         status        TEXT DEFAULT 'pending',
         created_at    REAL
     )""")
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS tasks (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +71,6 @@ def init_db():
         is_active   INTEGER DEFAULT 1,
         created_at  REAL
     )""")
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS task_completions (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,10 +79,9 @@ def init_db():
         status      TEXT DEFAULT 'pending',
         created_at  REAL
     )""")
-
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_ref  ON users(referrer_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_wd   ON withdrawals(user_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_tc   ON task_completions(user_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_ref ON users(referrer_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_wd  ON withdrawals(user_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_tc  ON task_completions(user_id)")
     conn.commit()
 
 init_db()
@@ -219,7 +215,6 @@ def is_banned(uid):
     return bool(u and u[10])
 
 def check_channels(uid):
-    """ያልተቀላቀላቸውን ቻናሎች ይመልሳል"""
     missing = []
     for ch in MANDATORY_CHANNELS:
         try:
@@ -227,7 +222,6 @@ def check_channels(uid):
             if m.status not in ("member", "administrator", "creator"):
                 missing.append(ch)
         except Exception as e:
-            # ቦቱ አድሚን ካልሆነ ወይም ቻናል ከሌለ
             print(f"[CH CHECK ERROR] {ch['id']}: {e}")
             missing.append(ch)
     return missing
@@ -290,7 +284,6 @@ def cmd_start(msg):
     username = msg.from_user.username or ""
     first    = msg.from_user.first_name or "ተጠቃሚ"
 
-    # ሪፈራል አውጣ
     args = msg.text.split()
     ref = None
     if len(args) > 1 and args[1].startswith("ref"):
@@ -304,7 +297,6 @@ def cmd_start(msg):
     if not existing:
         create_user(uid, username, first, ref)
 
-    # ቻናሎች ተረጋግጥ
     missing = check_channels(uid)
     if missing:
         bot.send_message(uid,
@@ -314,10 +306,9 @@ def cmd_start(msg):
             reply_markup=join_keyboard(missing))
         return
 
-    # ሁሉንም ተቀላቅሏል → verified + ሪፈራል ቦነስ
     if existing and existing[9] == 0:
         mark_verified(uid)
-        if existing[3]:  # referrer_id
+        if existing[3]:
             add_balance(existing[3], REFERRAL_BONUS)
             try:
                 bot.send_message(existing[3],
@@ -355,7 +346,6 @@ def cb_verify(call):
 
     bot.answer_callback_query(call.id, "✅ ተረጋግጧል!")
 
-    # verified አድርግ + ሪፈራል ቦነስ
     u = get_user(uid)
     if u and u[9] == 0:
         mark_verified(uid)
@@ -729,7 +719,6 @@ def cb_task_done(call):
     u = get_user(uid)
     _, title, desc, reward, url, active, _ = t
 
-    # ለአድሚን ላክ
     for admin in ADMIN_IDS:
         try:
             kb = types.InlineKeyboardMarkup(row_width=2)
@@ -785,7 +774,6 @@ def cb_task_action(call):
                 f"📌 {t[1] if t else ''}\n"
                 f"💰 +{reward:.2f} ብር")
         except: pass
-
     else:
         update_completion(cid, "rejected")
         bot.answer_callback_query(call.id, "❌ ውድቅ", show_alert=True)
@@ -794,8 +782,7 @@ def cb_task_action(call):
                 chat_id=call.message.chat.id, message_id=call.message.message_id)
         except: pass
         try:
-            bot.send_message(uid,
-                f"❌ *የታስክ ጥያቄዎ ውድቅ ተደርጓል*")
+            bot.send_message(uid, f"❌ *የታስክ ጥያቄዎ ውድቅ ተደርጓል*")
         except: pass
 
 # ============ ADMIN PANEL ============
@@ -831,7 +818,6 @@ def cmd_admin(msg):
     )
     bot.send_message(uid, text)
 
-# ---------- ADMIN: TASKS ----------
 @bot.message_handler(commands=["addtask"])
 def cmd_addtask(msg):
     if not is_admin(msg.from_user.id): return
@@ -893,7 +879,6 @@ def cmd_deltask(msg):
     delete_task(tid)
     bot.send_message(msg.chat.id, f"✅ #{tid} ተጠፍቷል")
 
-# ---------- ADMIN: USERS ----------
 @bot.message_handler(commands=["users"])
 def cmd_users(msg):
     if not is_admin(msg.from_user.id): return
@@ -1020,31 +1005,40 @@ def cmd_stats(msg):
     )
     bot.send_message(msg.chat.id, text)
 
+# ============ WEB HEALTH CHECK (for Render) ============
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Hulu Pay Bot is running ✅"
+
+def run_web():
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
+threading.Thread(target=run_web, daemon=True).start()
+
 # ============ STARTUP ============
 def startup_check():
     print("=" * 45)
     print("🤖 Hulu Pay Bot — ተጀምሯል")
     print("=" * 45)
-    # ቻናሎች ላይ ቦቱ አድሚን መሆኑን አረጋግጥ
+    try:
+        me = bot.get_me()
+        print(f"✅ Bot: @{me.username}")
+    except Exception as e:
+        print(f"❌ Bot error: {e}")
     for ch in MANDATORY_CHANNELS:
         try:
-            me = bot.get_me()
             m = bot.get_chat_member(ch["id"], me.id)
             if m.status in ("administrator", "creator"):
                 print(f"✅ {ch['name']} — አድሚን ነው")
             else:
-                print(f"⚠️  {ch['name']} — አድሚን አይደለም! (status: {m.status})")
+                print(f"⚠️  {ch['name']} — አድሚን አይደለም!")
         except Exception as e:
             print(f"❌ {ch['name']} — ስህተት: {e}")
-    try:
-        me = bot.get_me()
-        m = bot.get_chat_member(WITHDRAW_CHANNEL, me.id)
-        if m.status in ("administrator", "creator"):
-            print(f"✅ የዊዝድሮ ቻናል — አድሚን ነው")
-        else:
-            print(f"⚠️  የዊዝድሮ ቻናል — አድሚን አይደለም!")
-    except Exception as e:
-        print(f"❌ የዊዝድሮ ቻናል — ስህተት: {e}")
     print("=" * 45)
 
 if __name__ == "__main__":
